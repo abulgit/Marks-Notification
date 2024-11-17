@@ -97,18 +97,19 @@ try:
         if cols:
             marks_data.append([col.text for col in cols])
 
-    # Check CA4 marks and prepare message
-if check_ca4_marks(marks_data):
-    message = "🔔 CA4 marks published! Go checkout!"
-    # Send Telegram notification only when marks are found
+ # Check CA4 marks and prepare message
+    if check_ca4_marks(marks_data):
+        message = "🔔 CA4 marks published! Go checkout!"
+    else:
+        message = "No new CA4 marks available yet."
+
+    # Send the message to Telegram
     telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
     response = requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
     
+    # Verify if message was sent successfully
     if response.status_code != 200:
         print(f"Failed to send message to Telegram: {response.text}")
-else:
-    # Just print to console, don't send Telegram message
-    print("No new CA4 marks available yet.")
 
 
 except selenium.common.exceptions.TimeoutException:
