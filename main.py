@@ -58,7 +58,9 @@ try:
     student_button.click()
     time.sleep(1)
     # Wait for the popup and input registration number and password
-    reg_no_input = driver.find_element(By.ID, 'username')
+    reg_no_input = WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, 'username'))
+    )
     reg_no_input.send_keys(registration_number)
     password_input = driver.find_element(By.ID, 'password')
 
