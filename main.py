@@ -1,125 +1,155 @@
 import os
+from dataclasses import dataclass
+from typing import List, Optional
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import requests
-import time
+import logging
 
-# Configuration
-registration_number = os.getenv('REGISTRATION_NUMBER')
-password = os.getenv('PASSWORD')
-telegram_token = os.getenv('TELEGRAM_TOKEN')
-chat_id = os.getenv('CHAT_ID')
-url = 'https://makaut1.ucanapply.com/smartexam/public/student'
+@dataclass
+class Config:
+    registration_number: str
+    password: str
+    telegram_token: str
+    chat_id: str
+    base_url: str = 'https://makaut1.ucanapply.com/smartexam/public/student'
+    timeout: int = 10
 
+class MarksChecker:
+    def __init__(self, config: Config):
+        self.config = config
+        self.setup_logging()
+        self.setup_driver()
+        
+    def setup_logging(self):
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler('marks_checker.log'),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
 
-chrome_options = Options()
-chrome_options.add_argument("--headless=new")  # Modern headless mode
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--disable-extensions")
-chrome_options.add_argument("--disable-infobars")
-chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--no-sandbox")
-chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Disable images
+    def setup_driver(self):
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-infobars")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+        
+        self.driver = webdriver.Chrome(options=chrome_options)
+        self.wait = WebDriverWait(self.driver, self.config.timeout)
 
+    def login(self):
+        """Handle the login process"""
+        try:
+            self.driver.get(self.config.base_url)
+            
+            # Click student button
+            student_button = self.wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//a[@onclick='openLoginPage(5);']"))
+            )
+            student_button.click()
+            
+            # Fill login form
+            self.wait.until(EC.presence_of_element_located((By.ID, 'username'))).send_keys(
+                self.config.registration_number
+            )
+            self.driver.find_element(By.ID, 'password').send_keys(self.config.password)
+            
+            # Submit form
+            self.driver.find_element(By.XPATH, "//a[@class='btn btn-success btn-lg']").click()
+            
+            return True
+        except Exception as e:
+            self.logger.error(f"Login failed: {str(e)}")
+            return False
 
-driver = webdriver.Chrome(options=chrome_options)
+    def get_marks_data(self) -> Optional[List[List[str]]]:
+        """Extract marks data from the CA marks page"""
+        try:
+            # Navigate to CA marks page
+            self.wait.until(EC.presence_of_element_located((By.LINK_TEXT, 'CA Marks'))).click()
+            
+            # Get marks table
+            marks_table = self.wait.until(EC.presence_of_element_located((By.TAG_NAME, 'table')))
+            
+            marks_data = []
+            for row in marks_table.find_elements(By.TAG_NAME, 'tr'):
+                cols = row.find_elements(By.TAG_NAME, 'td')
+                if cols:
+                    marks_data.append([col.text for col in cols])
+            
+            return marks_data
+        except Exception as e:
+            self.logger.error(f"Failed to get marks data: {str(e)}")
+            return None
 
-def check_ca4_marks(marks_data):
-    # Skip the first two rows as they are headers
-    for i, row in enumerate(marks_data):
-        if i < 2:
-            continue  # Skip headers
-
-        # Ensure row has exactly 7 columns to match expected table structure
-        if len(row) == 7:
-            ca4_mark = row[5].strip()  # CA4 is at index 5
-            # Check for non-empty and non-whitespace CA4 marks
-            if ca4_mark and not ca4_mark.isspace():
-                print(f"Found CA4 mark: {ca4_mark} for row: {row}")
+    def check_ca4_marks(self, marks_data: List[List[str]]) -> bool:
+        """Check if CA4 marks are available"""
+        if not marks_data:
+            return False
+            
+        for row in marks_data[2:]:  # Skip headers
+            if len(row) == 7 and row[5].strip():  # CA4 is at index 5
+                self.logger.info(f"Found CA4 mark: {row[5]} for subject: {row[1]}")
                 return True
-        else:
-            # Log or print a message for unexpected row structure
-            print(f"Skipping row with unexpected number of columns: {row}")
+                
+        self.logger.info("No CA4 marks found")
+        return False
 
-    # If no CA4 marks are found
-    print("No CA4 marks found")
-    return False
+    def send_telegram_notification(self, message: str):
+        """Send notification via Telegram"""
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{self.config.telegram_token}/sendMessage",
+                data={'chat_id': self.config.chat_id, 'text': message}
+            )
+            response.raise_for_status()
+            self.logger.info("Telegram notification sent successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to send Telegram notification: {str(e)}")
 
+    def run(self):
+        """Main execution flow"""
+        try:
+            if not self.login():
+                self.send_telegram_notification("❌ Failed to login to the portal")
+                return
 
-try:
-    # Open the website
-    driver.get(url)
+            marks_data = self.get_marks_data()
+            if not marks_data:
+                self.send_telegram_notification("❌ Failed to fetch marks data")
+                return
 
-    # Wait for the Student button to be clickable and click it
-    student_button = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH, "//a[@onclick='openLoginPage(5);']"))
+            message = "🔔 CA4 marks published! Go check it out!" if self.check_ca4_marks(marks_data) else "No new CA4 marks available yet."
+            self.send_telegram_notification(message)
+
+        except Exception as e:
+            self.logger.error(f"An error occurred: {str(e)}")
+            self.send_telegram_notification(f"❌ An error occurred while checking marks: {str(e)}")
+        finally:
+            self.driver.quit()
+
+def main():
+    config = Config(
+        registration_number=os.getenv('REGISTRATION_NUMBER'),
+        password=os.getenv('PASSWORD'),
+        telegram_token=os.getenv('TELEGRAM_TOKEN'),
+        chat_id=os.getenv('CHAT_ID')
     )
-    student_button.click()
-    time.sleep(1)
-    # Wait for the popup and input registration number and password
-    reg_no_input = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, 'username'))
-    )
-    reg_no_input.send_keys(registration_number)
-    password_input = driver.find_element(By.ID, 'password')
-
     
-    password_input.send_keys(password)
+    checker = MarksChecker(config)
+    checker.run()
 
-    # Submit the form
-    submit_button = driver.find_element(By.XPATH, "//a[@class='btn btn-success btn-lg']")
-    submit_button.click()
-
-    # Wait for the dashboard to load
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.LINK_TEXT, 'CA Marks'))
-    )
-
-    # Click on the CA mark button
-    ca_mark_button = driver.find_element(By.LINK_TEXT, 'CA Marks')
-    ca_mark_button.click()
-
-    # Wait for the marks table to load
-    marks_table = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.TAG_NAME, 'table'))
-    )
-
-    # Extract the marks table
-    marks_data = []
-    rows = marks_table.find_elements(By.TAG_NAME, 'tr')
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, 'td')
-        if cols:
-            marks_data.append([col.text for col in cols])
-
- # Check CA4 marks and prepare message
-    if check_ca4_marks(marks_data):
-        message = "🔔 CA4 marks published! Go checkout!"
-    else:
-        message = "No new CA4 marks available yet."
-
-    # Send the message to Telegram
-    telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
-    response = requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
-    
-    # Verify if message was sent successfully
-    if response.status_code != 200:
-        print(f"Failed to send message to Telegram: {response.text}")
-
-
-except selenium.common.exceptions.TimeoutException:
-    message = "Failed to load element within timeout period"
-    requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
-except selenium.common.exceptions.NoSuchElementException:
-    message = "Failed to find required element"
-    requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
-except Exception as e:
-    message = f"An error occurred: {str(e)}"
-    requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
-finally:
-    driver.quit()
+if __name__ == "__main__":
+    main()
