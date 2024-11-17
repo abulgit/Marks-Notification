@@ -1,13 +1,15 @@
-name: CA Marks Checker
+name: CA Marks Checker 
 
 on:
   schedule:
-    - cron: '*/5 * * * *'   # Runs every 5 minutes
-  workflow_dispatch:  # Allows manual triggering for testing
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   selenium-check:
     runs-on: ubuntu-latest
+    container:
+      image: selenium/standalone-chrome:latest  # Pre-built container with Chrome and Selenium
 
     steps:
       - name: Checkout repository
@@ -16,18 +18,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'  # Specify your required Python version
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install --no-cache-dir -r requirements.txt
 
       - name: Run Selenium Script
         run: python main.py
