@@ -16,7 +16,6 @@ telegram_token = os.getenv('TELEGRAM_TOKEN')
 chat_id = os.getenv('CHAT_ID')
 url = 'https://makaut1.ucanapply.com/smartexam/public/student'
 
-
 chrome_options = Options()
 chrome_options.add_argument("--headless=new")  # Modern headless mode
 chrome_options.add_argument("--disable-gpu")
@@ -25,7 +24,6 @@ chrome_options.add_argument("--disable-infobars")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Disable images
-
 
 driver = webdriver.Chrome(options=chrome_options)
 
@@ -50,6 +48,11 @@ def check_ca4_marks(marks_data):
     print("No CA4 marks found")
     return False
 
+def send_telegram_message(message):
+    telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+    response = requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
+    if response.status_code != 200:
+        print(f"Failed to send message to Telegram: {response.text}")
 
 try:
     # Open the website
@@ -61,14 +64,13 @@ try:
     )
     student_button.click()
     time.sleep(1)
+    
     # Wait for the popup and input registration number and password
     reg_no_input = WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.ID, 'username'))
     )
     reg_no_input.send_keys(registration_number)
     password_input = driver.find_element(By.ID, 'password')
-
-    
     password_input.send_keys(password)
 
     # Submit the form
@@ -97,29 +99,16 @@ try:
         if cols:
             marks_data.append([col.text for col in cols])
 
- # Check CA4 marks and prepare message
+    # Check CA4 marks and only send message if marks are found
     if check_ca4_marks(marks_data):
         message = "🔔 CA4 marks published! Go checkout!"
-    else:
-        message = "No new CA4 marks available yet."
-
-    # Send the message to Telegram
-    telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
-    response = requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
-    
-    # Verify if message was sent successfully
-    if response.status_code != 200:
-        print(f"Failed to send message to Telegram: {response.text}")
-
+        send_telegram_message(message)
 
 except selenium.common.exceptions.TimeoutException:
-    message = "Failed to load element within timeout period"
-    requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
+    print("Failed to load element within timeout period")
 except selenium.common.exceptions.NoSuchElementException:
-    message = "Failed to find required element"
-    requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
+    print("Failed to find required element")
 except Exception as e:
-    message = f"An error occurred: {str(e)}"
-    requests.post(telegram_url, data={'chat_id': chat_id, 'text': message})
+    print(f"An error occurred: {str(e)}")
 finally:
     driver.quit()
