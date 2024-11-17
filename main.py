@@ -25,26 +25,25 @@ chrome_options.add_argument("--disable-dev-shm-usage")  # Optional: reduces reso
 driver = webdriver.Chrome(options=chrome_options)
 
 def check_ca4_marks(marks_data):
-    # Add debug printing
-    print("Analyzing marks data...")
-    for row in marks_data:
-        # Skip header rows
-        if 'SEMESTER' in ' '.join(row) or 'Paper Code' in ' '.join(row):
-            print(f"Skipping header row: {row}")
-            continue
-            
-        # Look for CA 4 column (index 5 since zero-based)
-        if len(row) > 5:  # Must have at least 6 columns
+    # Skip the first two rows as they are headers
+    for i, row in enumerate(marks_data):
+        if i < 2:
+            continue  # Skip headers
+
+        # Ensure row has exactly 7 columns to match expected table structure
+        if len(row) == 7:
             ca4_mark = row[5].strip()  # CA4 is at index 5
-            print(f"Checking CA4 mark: '{ca4_mark}' for row: {row}")
-            if ca4_mark and ca4_mark != '' and not ca4_mark.isspace():
-                print(f"Found CA4 mark: {ca4_mark}")
+            # Check for non-empty and non-whitespace CA4 marks
+            if ca4_mark and not ca4_mark.isspace():
+                print(f"Found CA4 mark: {ca4_mark} for row: {row}")
                 return True
+        else:
+            # Log or print a message for unexpected row structure
+            print(f"Skipping row with unexpected number of columns: {row}")
+
+    # If no CA4 marks are found
     print("No CA4 marks found")
     return False
-
-
-
 
 
 try:
