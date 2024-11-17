@@ -1,37 +1,30 @@
 name: CA Marks Checker 
-
 on:
   schedule:
-    - cron: '*/5 * * * *'   # Runs every 5 minutes
-  workflow_dispatch:  # Allows manual triggering for testing
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   selenium-check:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
         with:
-          python-version: '3.12'  # Specify your required Python version
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
+          fetch-depth: 1  # Shallow clone for faster checkout
+      
+      - uses: actions/setup-python@v4
         with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+          python-version: '3.12'
+          cache: 'pip'  # Use built-in pip caching (faster than manual cache)
+      
       - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run Selenium Script
-        run: python main.py
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+      
+      - name: Run Script
         env:
           REGISTRATION_NUMBER: ${{ secrets.REGISTRATION_NUMBER }}
           PASSWORD: ${{ secrets.PASSWORD }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python main.py
