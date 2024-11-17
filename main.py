@@ -17,12 +17,12 @@ url = 'https://makaut1.ucanapply.com/smartexam/public/student'
 chat_id = '1394339679'
 
 
-# Setup Chrome options
 chrome_options = Options()
-#chrome_options.add_argument("--headless")  # Run in headless mode
+chrome_options.add_argument("--headless")  # Ensures headless mode
+chrome_options.add_argument("--no-sandbox")  # Optional: helps prevent certain errors
+chrome_options.add_argument("--disable-dev-shm-usage")  # Optional: reduces resource usage
 
-# Initialize the WebDriver
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+driver = webdriver.Chrome(options=chrome_options)
 
 def check_ca4_marks(marks_data):
     # Add debug printing
