@@ -18,9 +18,14 @@ url = 'https://makaut1.ucanapply.com/smartexam/public/student'
 
 
 chrome_options = Options()
-chrome_options.add_argument("--headless")  # Ensures headless mode
-chrome_options.add_argument("--no-sandbox")  # Optional: helps prevent certain errors
-chrome_options.add_argument("--disable-dev-shm-usage")  # Optional: reduces resource usage
+chrome_options.add_argument("--headless=new")  # Modern headless mode
+chrome_options.add_argument("--disable-gpu")
+chrome_options.add_argument("--disable-extensions")
+chrome_options.add_argument("--disable-infobars")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Disable images
+
 
 driver = webdriver.Chrome(options=chrome_options)
 
