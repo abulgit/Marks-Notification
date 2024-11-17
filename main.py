@@ -49,7 +49,7 @@ class MarksChecker:
         self.driver = webdriver.Chrome(options=chrome_options)
         self.wait = WebDriverWait(self.driver, self.config.timeout)
 
-    def login(self):
+    def login(self) -> bool:
         """Handle the login process"""
         try:
             self.driver.get(self.config.base_url)
@@ -72,6 +72,7 @@ class MarksChecker:
             return True
         except Exception as e:
             self.logger.error(f"Login failed: {str(e)}")
+            self.send_telegram_notification("❌ Login failed. Please check your credentials.")
             return False
 
     def get_marks_data(self) -> Optional[List[List[str]]]:
@@ -123,20 +124,21 @@ class MarksChecker:
         """Main execution flow"""
         try:
             if not self.login():
-                self.send_telegram_notification("❌ Failed to login to the portal")
                 return
 
             marks_data = self.get_marks_data()
             if not marks_data:
-                self.send_telegram_notification("❌ Failed to fetch marks data")
+                self.logger.error("Failed to fetch marks data")
                 return
 
-            message = "🔔 CA4 marks published! Go check it out!" if self.check_ca4_marks(marks_data) else "No new CA4 marks available yet."
-            self.send_telegram_notification(message)
+            if self.check_ca4_marks(marks_data):
+                self.send_telegram_notification("🔔 CA4 marks published! Go check it out!")
+            else:
+                self.logger.info("No new marks found - skipping notification")
 
         except Exception as e:
             self.logger.error(f"An error occurred: {str(e)}")
-            self.send_telegram_notification(f"❌ An error occurred while checking marks: {str(e)}")
+            self.send_telegram_notification(f"❌ An error occurred: {str(e)}")
         finally:
             self.driver.quit()
 
