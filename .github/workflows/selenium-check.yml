@@ -2,13 +2,12 @@ name: CA Marks Checker
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
-    
+    - cron: '*/5 * * * *'   # Runs every 5 minutes
+  workflow_dispatch:  # Allows manual triggering for testing
+
 jobs:
   selenium-check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # Add timeout to prevent hanging
 
     steps:
       - name: Checkout repository
@@ -17,20 +16,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
-          cache: 'pip'  # Enable built-in pip caching
+          python-version: '3.12'  # Specify your required Python version
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Install Chrome
-        run: |
-          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/sources.list.d/google.list'
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+        run: pip install -r requirements.txt
 
       - name: Run Selenium Script
         run: python main.py
@@ -39,10 +35,3 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-
-      - name: Upload logs if failed
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: debug-logs
-          path: marks_checker.log
