@@ -9,11 +9,14 @@ jobs:
   selenium-check:
     runs-on: ubuntu-latest
     container:
-      image: selenium/standalone-chrome:latest  # Pre-built container with Chrome and Selenium
+      image: selenium/standalone-chrome:latest
+      options: --user 1001 # Add this line to set container user
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false # Add this to avoid credential issues
 
       - name: Set up Python
         uses: actions/setup-python@v4
