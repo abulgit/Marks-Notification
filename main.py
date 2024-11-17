@@ -12,7 +12,7 @@ import time
 # Configuration
 registration_number = '16500222030'
 password = 'Abulmac@#555'
-telegram_token = '7391430212:AAEalB03pXBw8N4P4oLlshkPox_PICXC_og'
+telegram_token = os.getenv('TELEGRAM_TOKEN')
 url = 'https://makaut1.ucanapply.com/smartexam/public/student' 
 chat_id = '1394339679'
 
