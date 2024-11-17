@@ -2,7 +2,7 @@ name: CA Marks Checker
 
 on:
   schedule:
-    - cron: '0 */5 * * *'  # Runs every 5 hours
+    - cron: '*/5 * * * *'   # Runs every 5 hours
   workflow_dispatch:  # Allows manual triggering for testing
 
 jobs:
@@ -29,3 +29,4 @@ jobs:
           REGISTRATION_NUMBER: ${{ secrets.REGISTRATION_NUMBER }}
           PASSWORD: ${{ secrets.PASSWORD }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
