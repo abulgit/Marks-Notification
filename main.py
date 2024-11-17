@@ -10,11 +10,12 @@ import requests
 import time
 
 # Configuration
-registration_number = os.getenv('REGISTRATION_NUMBER',"1584464")
-password = os.getenv('PASSWORD')
-telegram_token = os.getenv('TELEGRAM_TOKEN')
-url = 'https://makaut1.ucanapply.com/smartexam/public/student'  # Replace with your bot's token
+registration_number = '16500222030'
+password = 'Abulmac@#555'
+telegram_token = '7391430212:AAEalB03pXBw8N4P4oLlshkPox_PICXC_og'
+url = 'https://makaut1.ucanapply.com/smartexam/public/student' 
 chat_id = '1394339679'
+
 
 # Setup Chrome options
 chrome_options = Options()
