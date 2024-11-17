@@ -2,30 +2,31 @@ name: CA Marks Checker
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+    - cron: '*/5 * * * *'  
+  workflow_dispatch:  
 
 jobs:
   selenium-check:
     runs-on: ubuntu-latest
-    container:
-      image: selenium/standalone-chrome:latest
-      options: --user 1001 # Add this line to set container user
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-        with:
-          persist-credentials: false # Add this to avoid credential issues
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
-        run: |
-          pip install --no-cache-dir -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run Selenium Script
         run: python main.py
