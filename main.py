@@ -4,10 +4,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 import requests
 import time
+import selenium  # Added to handle exceptions
 
 # Configuration
 registration_number = os.getenv('REGISTRATION_NUMBER')
@@ -27,24 +29,24 @@ chrome_options.add_argument("--blink-settings=imagesEnabled=false")  # Disable i
 
 driver = webdriver.Chrome(options=chrome_options)
 
-def check_ca4_marks(marks_data):
-    # Skip the first two rows as they are headers
-    for i, row in enumerate(marks_data):
-        if i < 2:
-            continue  # Skip headers
+def retry_until_success(func, retries=3, delay=5):
+    for attempt in range(retries):
+        try:
+            return func()
+        except TimeoutException as e:
+            if attempt < retries - 1:
+                print(f"Retrying after TimeoutException ({attempt + 1}/{retries})...")
+                time.sleep(delay)
+            else:
+                raise e
 
-        # Ensure row has exactly 7 columns to match expected table structure
+def check_ca4_marks(marks_data):
+    for i, row in enumerate(marks_data[2:]):  # Skip headers
         if len(row) == 7:
-            ca4_mark = row[5].strip()  # CA4 is at index 5
-            # Check for non-empty and non-whitespace CA4 marks
+            ca4_mark = row[5].strip()
             if ca4_mark and not ca4_mark.isspace():
                 print(f"Found CA4 mark: {ca4_mark} for row: {row}")
                 return True
-        else:
-            # Log or print a message for unexpected row structure
-            print(f"Skipping row with unexpected number of columns: {row}")
-
-    # If no CA4 marks are found
     print("No CA4 marks found")
     return False
 
@@ -55,60 +57,45 @@ def send_telegram_message(message):
         print(f"Failed to send message to Telegram: {response.text}")
 
 try:
-    # Open the website
     driver.get(url)
 
-    # Wait for the Student button to be clickable and click it
-    student_button = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH, "//a[@onclick='openLoginPage(5);']"))
-    )
-    student_button.click()
-    time.sleep(1)
-    
-    # Wait for the popup and input registration number and password
-    reg_no_input = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, 'username'))
-    )
-    reg_no_input.send_keys(registration_number)
-    password_input = driver.find_element(By.ID, 'password')
-    password_input.send_keys(password)
-
-    # Submit the form
-    submit_button = driver.find_element(By.XPATH, "//a[@class='btn btn-success btn-lg']")
-    submit_button.click()
-
-    # Wait for the dashboard to load
-    WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.LINK_TEXT, 'CA Marks'))
+    retry_until_success(
+        lambda: WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//a[@onclick='openLoginPage(5);']"))
+        ).click()
     )
 
-    # Click on the CA mark button
-    ca_mark_button = driver.find_element(By.LINK_TEXT, 'CA Marks')
-    ca_mark_button.click()
+    retry_until_success(
+        lambda: WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, 'username'))
+        ).send_keys(registration_number)
+    )
+    driver.find_element(By.ID, 'password').send_keys(password)
+    driver.find_element(By.XPATH, "//a[@class='btn btn-success btn-lg']").click()
 
-    # Wait for the marks table to load
-    marks_table = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.TAG_NAME, 'table'))
+    retry_until_success(
+        lambda: WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.LINK_TEXT, 'CA Marks'))
+        )
+    ).click()
+
+    marks_table = retry_until_success(
+        lambda: WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, 'table'))
+        )
     )
 
-    # Extract the marks table
-    marks_data = []
     rows = marks_table.find_elements(By.TAG_NAME, 'tr')
-    for row in rows:
-        cols = row.find_elements(By.TAG_NAME, 'td')
-        if cols:
-            marks_data.append([col.text for col in cols])
+    marks_data = [[col.text for col in row.find_elements(By.TAG_NAME, 'td')] for row in rows if row.find_elements(By.TAG_NAME, 'td')]
 
-    # Check CA4 marks and only send message if marks are found
     if check_ca4_marks(marks_data):
-        message = "🔔 CA4 marks published! Go checkout!"
-        send_telegram_message(message)
+        send_telegram_message("🔔 CA4 marks published! Go checkout!")
 
-except selenium.common.exceptions.TimeoutException:
-    print("Failed to load element within timeout period")
-except selenium.common.exceptions.NoSuchElementException:
-    print("Failed to find required element")
+except TimeoutException:
+    print("TimeoutException: Failed to load element within timeout period")
+except NoSuchElementException:
+    print("NoSuchElementException: Failed to find required element")
 except Exception as e:
-    print(f"An error occurred: {str(e)}")
+    print(f"An unexpected error occurred: {str(e)}")
 finally:
     driver.quit()
